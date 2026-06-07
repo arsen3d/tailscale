@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Z-Image Turbo · DiT in the Browser (ONNX Runtime Web)</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Z-Image Turbo — DiT in your browser</h1>
+      <p class="sub">
+        An 8-step Diffusion Transformer running locally with
+        <a href="https://onnxruntime.ai/docs/get-started/with-javascript/web.html" target="_blank" rel="noreferrer">ONNX Runtime Web</a>.
+        Inspired by Intel's
+        <a href="https://community.intel.com/t5/Blogs/Tech-Innovation/Artificial-Intelligence-AI/From-U-Net-to-DiT-Z-Image-Turbo-Runs-in-Your-Browser/post/1743862" target="_blank" rel="noreferrer">“From U-Net to DiT”</a>.
+      </p>
+    </header>
+
+    <main>
+      <section class="panel">
+        <h2>1 · Models</h2>
+        <p class="hint">
+          Provide URLs to your ONNX exports. They are loaded into separate ORT sessions and
+          run entirely client-side. See <code>README.md</code> for how to export them.
+        </p>
+        <label>Text encoder ONNX
+          <input id="textEncoderUrl" type="text" placeholder="https://…/text_encoder.onnx" />
+        </label>
+        <label>DiT denoiser ONNX
+          <input id="transformerUrl" type="text" placeholder="https://…/transformer.onnx" />
+        </label>
+        <label>VAE decoder ONNX
+          <input id="vaeDecoderUrl" type="text" placeholder="https://…/vae_decoder.onnx" />
+        </label>
+        <label>Tokenizer (HF repo id)
+          <input id="tokenizer" type="text" value="Qwen/Qwen2.5-1.5B" />
+        </label>
+        <div class="row">
+          <label class="small">Latent channels
+            <input id="latentChannels" type="number" value="16" min="1" />
+          </label>
+          <label class="small">VAE scale
+            <input id="vaeScale" type="number" value="8" min="1" />
+          </label>
+          <label class="small">VAE scaling
+            <input id="vaeScaling" type="number" value="1.0" step="0.01" />
+          </label>
+        </div>
+        <button id="loadBtn">Load pipeline</button>
+        <p id="epInfo" class="badge"></p>
+      </section>
+
+      <section class="panel">
+        <h2>2 · Prompt</h2>
+        <label>Prompt
+          <textarea id="prompt" rows="3" placeholder="a serene koi pond at dawn, cinematic lighting">a serene koi pond at dawn, cinematic lighting</textarea>
+        </label>
+        <div class="row">
+          <label class="small">Steps
+            <input id="steps" type="number" value="8" min="1" max="50" />
+          </label>
+          <label class="small">Width
+            <input id="width" type="number" value="512" step="64" />
+          </label>
+          <label class="small">Height
+            <input id="height" type="number" value="512" step="64" />
+          </label>
+          <label class="small">Seed
+            <input id="seed" type="number" value="42" />
+          </label>
+        </div>
+        <button id="genBtn" disabled>Generate</button>
+        <progress id="prog" value="0" max="8" hidden></progress>
+      </section>
+
+      <section class="panel output">
+        <h2>3 · Output</h2>
+        <canvas id="canvas" width="512" height="512"></canvas>
+      </section>
+    </main>
+
+    <aside class="logwrap">
+      <h2>Log</h2>
+      <pre id="logbox"></pre>
+    </aside>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
