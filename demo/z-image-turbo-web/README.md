@@ -63,19 +63,24 @@ automatically falls back to the WebAssembly CPU backend (slower but works everyw
 ## Providing models
 
 In the **Models** panel, paste URLs to three ONNX files. They can be local (served from this
-same folder) or remote (CORS must allow them). Export them from the diffusers pipeline, e.g.
-with [`optimum`](https://huggingface.co/docs/optimum/exporters/onnx/overview):
+same folder) or remote (CORS must allow them).
+
+> ⚠️ There is **no** `optimum-cli export onnx --task text-to-image` config for Z-Image — the
+> DiT's `forward` takes Python lists of variable-length tensors, so it doesn't trace as a
+> single static graph. You export each component manually.
+
+A ready-to-edit export script and a full walkthrough are included:
 
 ```bash
-pip install "optimum[onnxruntime]" diffusers
-optimum-cli export onnx \
-  --model <z-image-turbo-repo> \
-  --task text-to-image \
-  z-image-onnx/
+pip install "diffusers>=0.38.0" transformers accelerate torch onnx onnxruntime
+python export_z_image_onnx.py --model Tongyi-MAI/Z-Image-Turbo \
+  --out ./onnx --height 512 --width 512 --seq 512 --opset 18
 ```
 
-That produces `text_encoder/`, `transformer/` (the DiT), and `vae_decoder/` ONNX graphs.
-Point the three fields at the corresponding `model.onnx` files.
+See **[EXPORT.md](./EXPORT.md)** for the architecture details, per-component steps, the 2 GB
+external-data caveat, quantization, and validation. It produces `text_encoder.onnx`,
+`transformer.onnx`, and `vae_decoder.onnx` (plus `*.onnx_data` sidecars for the big ones) —
+point the three fields at those.
 
 ### Knobs that must match your export
 
@@ -96,6 +101,8 @@ timestep convention, adjust `generate()` in [`pipeline.js`](./pipeline.js).
 - `app.js` — UI wiring / event handlers
 - `pipeline.js` — ORT Web sessions, tokenizer, flow-matching sampler, VAE decode
 - `styles.css` — styling
+- `export_z_image_onnx.py` — exports the 3 components to ONNX
+- `EXPORT.md` — full guide to building the model for ONNX
 
 ## Notes & limitations
 
