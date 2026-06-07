@@ -169,6 +169,13 @@ def main():
     ap.add_argument("--opset", type=int, default=18)
     ap.add_argument("--only", choices=["vae", "text", "dit"], default=None,
                     help="export only one component")
+    ap.add_argument("--lora", default=None,
+                    help="LoRA to bake in before export. HF repo id or local path/file. "
+                         "Repeat-style stacking: pass a comma-separated list.")
+    ap.add_argument("--lora-weight-name", default=None,
+                    help="specific .safetensors file inside the LoRA repo, if needed")
+    ap.add_argument("--lora-scale", type=float, default=1.0,
+                    help="LoRA strength to fuse at (default 1.0)")
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
@@ -176,6 +183,31 @@ def main():
     from diffusers import ZImagePipeline
     print(f"Loading {args.model} (fp32 on CPU; this needs lots of RAM)…")
     pipe = ZImagePipeline.from_pretrained(args.model, torch_dtype=torch.float32)
+
+    # --- LoRA: bake the adapter into the weights BEFORE export ---------------
+    # ONNX is a frozen graph: there is no runtime adapter. The only way to get a
+    # custom character into the browser pipeline is to fuse the LoRA here, then
+    # export (and only then quantize). Each fused LoRA -> its own ONNX file.
+    if args.lora:
+        loras = [s.strip() for s in args.lora.split(",") if s.strip()]
+        names = []
+        for i, lp in enumerate(loras):
+            name = f"lora{i}"
+            kw = {"adapter_name": name}
+            if args.lora_weight_name and len(loras) == 1:
+                kw["weight_name"] = args.lora_weight_name
+            print(f"Loading LoRA {lp!r} as {name}…")
+            # NOTE: Z-Image stores attention as a single fused QKV matrix. Many
+            # community LoRAs ship separate to_q/to_k/to_v and will SILENTLY not
+            # apply without conversion — use a recent diffusers (PR #12750+) or a
+            # fused-QKV-aware loader and verify the keys actually matched.
+            pipe.load_lora_weights(lp, **kw)
+            names.append(name)
+        pipe.set_adapters(names, adapter_weights=[args.lora_scale] * len(names))
+        print(f"Fusing LoRA(s) {names} at scale {args.lora_scale}…")
+        pipe.fuse_lora()
+        pipe.unload_lora_weights()  # weights are now baked into the base modules
+    # ------------------------------------------------------------------------
 
     with torch.no_grad():
         if args.only in (None, "vae"):

@@ -94,6 +94,31 @@ quantize_dynamic("onnx/transformer.onnx", "onnx/transformer.int8.onnx",
 - Browser memory is finite — even int4, a 6B model is ~3 GB of weights to download and hold.
   This is why most "in-browser" DiT demos use distilled/quantized models and modest resolutions.
 
+## Custom characters with LoRA
+
+Diffusers supports Z-Image LoRA ([PR #12750](https://github.com/huggingface/diffusers/pull/12750)):
+`load_lora_weights` / `set_adapters` / `fuse_lora`. But **ONNX is a frozen graph** — there is no
+runtime adapter in ORT Web. You **bake the LoRA into the weights before export**:
+
+```bash
+python export_z_image_onnx.py --only dit \
+  --lora <hf-repo-or-path> --lora-scale 0.9 --out ./onnx-mychar
+# stack several: --lora "repoA,repoB"
+```
+
+The script calls `load_lora_weights → set_adapters → fuse_lora` before tracing, so the resulting
+`transformer.onnx` *is* your custom character. Consequences:
+
+- **One fused LoRA = one ONNX file.** No runtime switching; at ~6B that's a multi-GB download per
+  character. Good for a small fixed cast, not an open LoRA library. (Dynamic LoRA swapping only
+  works server-side in PyTorch.)
+- **Order matters:** fuse **before** quantizing. `LoRA → fuse → export → quantize`.
+- **Fused-QKV trap:** Z-Image stores attention as a single fused QKV matrix, but many community
+  LoRAs ship separate `to_q`/`to_k`/`to_v`. Loaded without conversion they **silently don't apply**
+  (you'll get the base model). Use a recent diffusers (PR #12750+) or a fused-QKV-aware loader, and
+  verify the LoRA keys actually matched before exporting.
+- If the LoRA also trains the text encoder, re-export `--only text` too.
+
 ## Validate before shipping
 
 After export, sanity-check each graph in Python with `onnxruntime` (CPU) against the original
